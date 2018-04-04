@@ -1,0 +1,11 @@
+Howdy {{email}}!
+
+Thanks for signing up for {{service}}. But first we need to confirm your email address. Please visit this link
+{{link}}
+in your browser to complete the email verification process.
+
+If you did not create an account with {{service}}, please ignore this email (and do not visit that link!)
+
+With thanks,
+{{admin_name}}
+{{service}}

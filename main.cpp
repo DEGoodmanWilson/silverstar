@@ -231,14 +231,16 @@ int main(int, char **)
                                                                          << bsoncxx::builder::stream::finalize);
                             // Send confirmation email via mailgun
                             std::string link{domain + "/api/v1/confirm?token=" + token + "&email=" + email};
-                            std::string mail_body_html_template{R"(<a href="{{link}}">confirm your email</a>)"};
-                            std::string mail_body_text_template = R"(Please visit this link to confirm your email: {{link}})";
 
                             nlohmann::json mail_data;
                             mail_data["link"] = link;
-                            inja::Environment env{};
-                            auto mail_body_html = env.render(mail_body_html_template, mail_data);
-                            auto mail_body_text = env.render(mail_body_text_template, mail_data);
+                            mail_data["email"] = email;
+                            mail_data["service"] = "Cardtagger";
+                            mail_data["admin_name"] = "Don Goodman-Wilson";
+
+                            inja::Environment env{"./templates/"};
+                            auto mail_body_html = env.render_template(env.parse_template("confirm_email.html"), mail_data);
+                            auto mail_body_text = env.render_template(env.parse_template("confirm_email.txt"), mail_data);
 
                             auto r = cpr::Post(cpr::Url{"https://api.mailgun.net/v3/mail.goodman-wilson.com/messages"},
                                                cpr::Payload{{"to",      email},

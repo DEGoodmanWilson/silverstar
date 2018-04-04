@@ -20,6 +20,7 @@
 #include <sstream>
 #include <chrono>
 #include <regex>
+#include <random>
 
 #include <luna/luna.h>
 #include <jwt/jwt.hpp>
@@ -92,6 +93,15 @@ std::string getenvstr(const std::string &key)
 {
     auto val = std::getenv(key.c_str());
     return val == NULL ? std::string{} : std::string{val};
+}
+
+template<typename ... Args>
+std::string string_format(const std::string &format, Args ... args)
+{
+    size_t size = snprintf(nullptr, 0, format.c_str(), args ...) + 1; // Extra space for '\0'
+    std::unique_ptr<char[]> buf(new char[size]);
+    snprintf(buf.get(), size, format.c_str(), args ...);
+    return std::string{buf.get(), buf.get() + size - 1}; // We don't want the '\0' inside
 }
 
 
@@ -173,7 +183,7 @@ int main(int, char **)
     api->handle_request(luna::request_method::POST, "/create", [=, &db_pool_](const auto &request) -> luna::response
                         {
                             const auto email = request.params.at("email");
-                            const auto password = request.params.at("password");
+                            auto password = request.params.at("password");
                             // see if this account already exists. If it does, we need to signal this without giving too much away.
                             // Best way to do this is to return a success status code regardless.
 
@@ -190,6 +200,7 @@ int main(int, char **)
                                 /* out of memory */
                                 throw std::runtime_error{"Not enough memory to hash password"};
                             }
+                            password = hashed_password;
 
                             // Connect to DB
                             auto client = db_pool_.acquire();
@@ -211,23 +222,32 @@ int main(int, char **)
                             if (!provisional_user) // if this user doesn't already exist, provisionally, create a provisional account.
                             {
                                 provisional_users.insert_one(
-                                        bsoncxx::builder::stream::document{} << "email" << email << "password" << hashed_password
+                                        bsoncxx::builder::stream::document{} << "email" << email << "password" << password
                                                                              << bsoncxx::builder::stream::finalize);
                             }
-                            // Create a token that expires in 24 hours
-                            jwt::jwt_object obj{jwt::params::algorithm(jwt::algorithm::RS256), jwt::params::secret(priv_key)};
-                            obj.add_claim("iss", SILVERSTAR)
-                                    .add_claim("sub", email)
-                                    .add_claim("exp", std::chrono::system_clock::now() + std::chrono::hours{24})
-                                    .add_claim("aud", "provisional") // for provisional use only
-                                    ;
-                            auto token = obj.signature();
 
-                            // store in the DB
+                            // Create a token
+                            // Seed with a real random value, if available
+                            std::random_device rd;  //Will be used to obtain a seed for the random number engine
+                            std::mt19937 gen(rd()); //Standard mersenne_twister_engine seeded with rd()
+                            std::uniform_int_distribution<uint64_t> dis64(0, UINT64_MAX);
+                            std::string token = string_format("%08x%08x%08x%08x", dis64(gen), dis64(gen), dis64(gen), dis64(gen));
+
+                            luna::error_log(luna::log_level::DEBUG, token);
+
+
+                            // store in the DB, make it viable for 6 hours.
+                            auto expiry = std::chrono::system_clock::now() + std::chrono::hours{6};
+                            auto expiry_seconds = std::chrono::time_point_cast<std::chrono::seconds>(expiry);
+
+                            auto expiry_value = expiry_seconds.time_since_epoch();
+                            long expiry_duration = expiry_value.count();
+
                             provisional_users.update_one(
                                     bsoncxx::builder::stream::document{} << "email" << email << bsoncxx::builder::stream::finalize,
                                     bsoncxx::builder::stream::document{} << "$set" << bsoncxx::builder::stream::open_document <<
-                                                                         "token" << token << bsoncxx::builder::stream::close_document
+                                                                         "token" << token << "expiry" << expiry_value.count()
+                                                                         << bsoncxx::builder::stream::close_document
                                                                          << bsoncxx::builder::stream::finalize);
                             // Send confirmation email via mailgun
                             std::string link{domain + "/api/v1/confirm?token=" + token + "&email=" + email};
@@ -242,7 +262,7 @@ int main(int, char **)
                             auto mail_body_html = env.render_template(env.parse_template("confirm_email.html"), mail_data);
                             auto mail_body_text = env.render_template(env.parse_template("confirm_email.txt"), mail_data);
 
-                            auto r = cpr::Post(cpr::Url{"https://api.mailgun.net/v3/mail.goodman-wilson.com/messages"},
+                            auto mailgun_result = cpr::Post(cpr::Url{"https://api.mailgun.net/v3/mail.goodman-wilson.com/messages"},
                                                cpr::Payload{{"to",      email},
                                                             {"from",    "auth@mail.goodman-wilson.com"},
                                                             {"subject", "Verify your goodman-wilson.com account"},
@@ -250,7 +270,7 @@ int main(int, char **)
                                                             {"text",    mail_body_text}},
                                                cpr::Authentication{"api", mailgun_api_key});
 
-                            if(r.status_code != 200)
+                            if (mailgun_result.status_code != 200)
                             {
                                 throw std::runtime_error{"Mailgun request failed for " + email};
                             }

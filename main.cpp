@@ -180,7 +180,7 @@ int main(int, char **)
         };
     });
 
-    api->handle_request(luna::request_method::POST, "/create", [=, &db_pool_](const auto &request) -> luna::response
+    api->handle_request(luna::request_method::POST, "/register", [=, &db_pool_](const auto &request) -> luna::response
                         {
                             const auto email = request.params.at("email");
                             auto password = request.params.at("password");
@@ -263,12 +263,12 @@ int main(int, char **)
                             auto mail_body_text = env.render_template(env.parse_template("confirm_email.txt"), mail_data);
 
                             auto mailgun_result = cpr::Post(cpr::Url{"https://api.mailgun.net/v3/mail.goodman-wilson.com/messages"},
-                                               cpr::Payload{{"to",      email},
-                                                            {"from",    "auth@mail.goodman-wilson.com"},
-                                                            {"subject", "Verify your goodman-wilson.com account"},
-                                                            {"html",    mail_body_html},
-                                                            {"text",    mail_body_text}},
-                                               cpr::Authentication{"api", mailgun_api_key});
+                                                            cpr::Payload{{"to",      email},
+                                                                         {"from",    "auth@mail.goodman-wilson.com"},
+                                                                         {"subject", "Verify your goodman-wilson.com account"},
+                                                                         {"html",    mail_body_html},
+                                                                         {"text",    mail_body_text}},
+                                                            cpr::Authentication{"api", mailgun_api_key});
 
                             if (mailgun_result.status_code != 200)
                             {
@@ -282,7 +282,7 @@ int main(int, char **)
                                                                                                   std::regex{
                                                                                                           R"(.+\@.+\..+)"})
                                 },
-                                // require passwords to be at least 8 characters.
+                                // require passwords to be at least 8 characters. Really this should be checked in FE, but a second check here is good too for folks who want to bypass the FE entirely.
                                 {"password", luna::parameter::required, luna::parameter::validate([](const std::string &a,
                                                                                                      int length) -> bool
                                                                                                   {
@@ -293,19 +293,51 @@ int main(int, char **)
                                 }
                         });
 
-    api->handle_request(luna::request_method::POST, "/confirm", [](const auto &request) -> luna::response
+    api->handle_request(luna::request_method::GET, "/confirm", [=, &db_pool_](const auto &request) -> luna::response
                         {
                             // This is where we take in a code generated in the /create step. If not, return "OK" so we don't create a security issue that allows enumeration of accounts
 
-                            // Check the code. These can't be enumerated so maybe it is OK to return an error here?
+                            const auto email = request.params.at("email");
+                            const auto token = request.params.at("token");
 
-                            // move account from provisional to confirmed
+                            // Check the code. These can't be enumerated so maybe it is OK to return an error here?
+                            auto client = db_pool_.acquire();
+
+                            auto provisional_users = (*client)["magique"]["provisional_users"];
+
+                            auto provisional_user = provisional_users.find_one(
+                                    bsoncxx::builder::stream::document{} << "email" << email << "token" << token
+                                                                         << bsoncxx::builder::stream::finalize);
+                            if (!provisional_user) // if this user doesn't exists, just return. It's ok to error here, because there isn't a way to enumerate that will reveal anything useful in a short amount of time
+                            {
+                                return 404;
+                            }
+
+                            // move account from provisional to confirmed. Would be cool if we could do this atomically
+                            provisional_users.delete_one(bsoncxx::builder::stream::document{} << "email" << email << "token" << token
+                                                                                              << bsoncxx::builder::stream::finalize);
+
+                            auto users = (*client)["magique"]["users"];
+
+                            // Check if it exists. Just in case we somehow got here twice.
+                            auto user = users.find_one(
+                                    bsoncxx::builder::stream::document{} << "email" << email << bsoncxx::builder::stream::finalize);
+                            if (user)
+                            {
+                                return {"OK"};
+                            }
+
+                            const std::string password{(*provisional_user).view()["password"].get_utf8().value.to_string()};
+                            users.insert_one(bsoncxx::builder::stream::document{} << "email" << email << "password"
+                                                                                  << password
+                                                                                  << bsoncxx::builder::stream::finalize);
+
 
                             return {"OK"};
                         },
                         {
                                 {"email", true},
-                                {"code",  true}
+                                {"token", true}
                         });
 
     api->handle_request(luna::request_method::GET, "/login", [=](const auto &request) -> luna::response

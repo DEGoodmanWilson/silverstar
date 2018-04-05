@@ -187,7 +187,6 @@ int main(int, char **)
                             // see if this account already exists. If it does, we need to signal this without giving too much away.
                             // Best way to do this is to return a success status code regardless.
 
-
                             // hash the password. This is a C interface, booooo
                             char hashed_password[crypto_pwhash_STRBYTES];
 
@@ -340,7 +339,7 @@ int main(int, char **)
                                 {"token", true}
                         });
 
-    api->handle_request(luna::request_method::GET, "/login", [=](const auto &request) -> luna::response
+    api->handle_request(luna::request_method::GET, "/login", [=, &db_pool_](const auto &request) -> luna::response
     {
         // Use basic auth
         auto authorized = luna::get_basic_authorization(request.headers);
@@ -350,7 +349,42 @@ int main(int, char **)
 
         // auth was provided, we need to check it.
         luna::error_log(luna::log_level::DEBUG, authorized.username);
-        // TODO just assume it's cool, let's issue a fake JWT.
+
+        // compare the email and the hash
+        // Connect to DB
+        auto client = db_pool_.acquire();
+        auto users = (*client)["magique"]["users"];
+        auto user = users.find_one(
+                bsoncxx::builder::stream::document{} << "email" << authorized.username << bsoncxx::builder::stream::finalize);
+
+        if (!user) // if not such user, throw an unauthorized
+        {
+            // TODO to prevent timing attacks to discover existing user accounts, we should insert a semi-random delay here to make the function closer to constant-time
+            // We'll do this by just hasing the password they gave us.
+            // TODO will this get optimized away?
+            // hash the password. This is a C interface, booooo
+            char hashed_password[crypto_pwhash_STRBYTES];
+
+            if (crypto_pwhash_str(hashed_password,
+                                  authorized.password.c_str(),
+                                  authorized.password.length(),
+                                  crypto_pwhash_OPSLIMIT_INTERACTIVE,
+                                  crypto_pwhash_MEMLIMIT_INTERACTIVE) != 0)
+            {
+                /* out of memory */
+                throw std::runtime_error{"Not enough memory to hash password"};
+            }
+            return 401;
+        }
+
+        const std::string hashed_password{(*user).view()["password"].get_utf8().value.to_string()};
+        
+        if (crypto_pwhash_str_verify
+                    (hashed_password.c_str(), authorized.password.c_str(), authorized.password.length()) != 0) {
+            return 401;
+        }
+
+
 
         //Create JWT object
         jwt::jwt_object obj{jwt::params::algorithm(jwt::algorithm::RS256), jwt::params::secret(priv_key)};

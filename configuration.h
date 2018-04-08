@@ -25,8 +25,13 @@ class configuration
 public:
     configuration();
 
+    std::string appname;
+
     uint16_t port;
     std::string domain;
+
+    std::string private_key;
+    std::string public_key;
 
     std::string mongo_uri;
     std::shared_ptr<mongocxx::pool> db_pool;

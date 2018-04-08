@@ -18,22 +18,49 @@
 #include "configuration.h"
 
 #include <unordered_set>
+#include <regex>
+#include <fstream>
+
+
+std::string read_from_file_(const std::string &path)
+{
+    std::stringstream contents;
+    std::ifstream is{path};
+    if (is)
+    {
+        contents << is.rdbuf();
+        is.close();
+    }
+
+    else
+    {
+        throw std::runtime_error{"Could not read from file " + path};
+    }
+
+    return contents.str();
+}
 
 void from_json(const nlohmann::json &j, configuration &c)
 {
-    std::unordered_set<std::string> required{"port", "domain"};
+    std::unordered_set<std::string> required{"public_key_filename", "private_key_filename", "appname", "port", "domain"};
 
     if (!j.is_object())
     {
         throw std::runtime_error{"Configuration file is not a JSON object"};
     }
 
+    std::string public_key_filename, private_key_filename;
+
     // we use a for loop to detect a) keys we don't recognize and b) to ensure all the required keys are hit
     for (auto kv = j.begin(); kv != j.end(); ++kv)
     {
         std::string key = kv.key();
-
-        if (key == "port")
+        if (key == "appname")
+        {
+            required.erase(key);
+            c.appname = kv.value().get<std::string>();
+        }
+        else if (key == "port")
         {
             required.erase(key);
             c.port = kv.value().get<uint16_t>();
@@ -42,6 +69,16 @@ void from_json(const nlohmann::json &j, configuration &c)
         {
             required.erase(key);
             c.domain = kv.value().get<std::string>();
+        }
+        else if (key == "public_key_filename")
+        {
+            required.erase(key);
+            public_key_filename = kv.value().get<std::string>();
+        }
+        else if (key == "private_key_filename")
+        {
+            required.erase(key);
+            private_key_filename = kv.value().get<std::string>();
         }
         else
         {
@@ -54,8 +91,15 @@ void from_json(const nlohmann::json &j, configuration &c)
         // Yes I know i am throwing an exception inside a loop. Sue me. It's an easy way to discover if anything remains, and what it is.
         throw std::runtime_error{"Missing configuration key " + key};
     }
-}
 
+    // for security reasons, verify that this is actually a public key!!
+    c.public_key = read_from_file_(public_key_filename);
+    if (!std::regex_search(c.public_key, std::regex{R"(^-----BEGIN PUBLIC KEY-----)"}))
+    {
+        throw std::runtime_error{"Invalid public key"};
+    }
+    c.private_key = read_from_file_(private_key_filename);
+}
 
 std::string getenvstr_(const std::string &key)
 {

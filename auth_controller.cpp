@@ -40,26 +40,6 @@
 
 static const std::string SILVERSTAR{"silverstar"};
 
-std::string read_from_file_(const std::string &path)
-{
-    std::stringstream contents;
-    std::ifstream is{path};
-    if (is)
-    {
-        contents << is.rdbuf();
-        is.close();
-    }
-
-    else
-    {
-        luna::error_log(luna::log_level::FATAL, "FILE " + path + " not FOUND!!");
-        return "";
-    }
-
-    return contents.str();
-}
-
-
 template<typename ... Args>
 std::string string_format_(const std::string &format, Args ... args)
 {
@@ -72,18 +52,6 @@ std::string string_format_(const std::string &format, Args ... args)
 auth_controller::auth_controller(std::shared_ptr<luna::router> router, configuration config) :
         config_{config}
 {
-    // Get RSA public and private keys
-
-    // TODO for security reasons, verify that this is actually a public key!!
-    pub_key_ = read_from_file_("jwtRS256.key.pub");
-    if (!std::regex_search(pub_key_, std::regex{R"(^-----BEGIN PUBLIC KEY-----)"}))
-    {
-        luna::error_log(luna::log_level::FATAL, "INVALID PUBLIC KEY!");
-        throw std::runtime_error{"Invalid public key"};
-    }
-    priv_key_ = read_from_file_("jwtRS256.key");
-
-
     // Endpoints for:
     //  1. Account creation
     //  2. Logging in
@@ -323,7 +291,7 @@ luna::response auth_controller::login_(const luna::request &request)
 
 
     //Create JWT object
-    jwt::jwt_object obj{jwt::params::algorithm(jwt::algorithm::RS256), jwt::params::secret(priv_key_)};
+    jwt::jwt_object obj{jwt::params::algorithm(jwt::algorithm::RS256), jwt::params::secret(config_.private_key)};
     obj.add_claim("iss", SILVERSTAR)
             .add_claim("sub", authorized.username)
             .add_claim("aud", "verified") // for verified users only

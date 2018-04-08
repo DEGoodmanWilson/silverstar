@@ -34,7 +34,7 @@ set(SOURCE_FILES
 #        controllers/card_controller.cpp
 #        controllers/card_controller.h
 #        models/ability.cpp models/ability.h
-        )
+        auth_controller.cpp auth_controller.h configuration.cpp configuration.h)
 
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
 

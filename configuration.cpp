@@ -21,6 +21,8 @@
 #include <regex>
 #include <fstream>
 
+#include <base64/base64.h>
+
 
 std::string read_from_file_(const std::string &path)
 {
@@ -88,8 +90,8 @@ std::string getenvstr_(const std::string &key)
 configuration::configuration() :
         mongo_uri{getenvstr_("MONGO_URI")},
         mailgun_api_key{getenvstr_("MAILGUN_API_KEY")},
-        public_key{getenv("PUBLIC_KEY")},
-        private_key{getenv("PRIVATE_KEY")}
+        public_key{base64_decode(getenv("PUBLIC_KEY"))},
+        private_key{base64_decode(getenv("PRIVATE_KEY"))}
 {
     if (mongo_uri.empty())
     {

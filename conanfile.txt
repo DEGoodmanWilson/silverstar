@@ -23,6 +23,7 @@ cpp-jwt/[~=1.0]@DEGoodmanWilson/stable
 libsodium/[~=1.0]@bincrafters/stable
 cpr/[~=1.3]@DEGoodmanWilson/stable
 inja/[~=1.0]@DEGoodmanWilson/stable
+base64/[~=1.0]@DEGoodmanWilson/stable
 
 # for testing
 Catch/[~=1.9]@bincrafters/stable

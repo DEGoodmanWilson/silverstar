@@ -1,7 +1,5 @@
 {
   "appname": "silverstar",
   "port": 9091,
-  "domain": "localhost",
-  "private_key_filename": "jwtRS256.key",
-  "public_key_filename": "jwtRS256.key.pub"
+  "domain": "localhost"
 }

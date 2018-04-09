@@ -42,7 +42,7 @@ std::string read_from_file_(const std::string &path)
 
 void from_json(const nlohmann::json &j, configuration &c)
 {
-    std::unordered_set<std::string> required{"public_key_filename", "private_key_filename", "appname", "port", "domain"};
+    std::unordered_set<std::string> required{"appname", "port", "domain"};
 
     if (!j.is_object())
     {
@@ -70,20 +70,6 @@ void from_json(const nlohmann::json &j, configuration &c)
             required.erase(key);
             c.domain = kv.value().get<std::string>();
         }
-        else if (key == "public_key_filename")
-        {
-            required.erase(key);
-            public_key_filename = kv.value().get<std::string>();
-        }
-        else if (key == "private_key_filename")
-        {
-            required.erase(key);
-            private_key_filename = kv.value().get<std::string>();
-        }
-        else
-        {
-            throw std::runtime_error{"Unrecognized configuration key " + key};
-        }
     }
 
     for (const auto key : required)
@@ -91,14 +77,6 @@ void from_json(const nlohmann::json &j, configuration &c)
         // Yes I know i am throwing an exception inside a loop. Sue me. It's an easy way to discover if anything remains, and what it is.
         throw std::runtime_error{"Missing configuration key " + key};
     }
-
-    // for security reasons, verify that this is actually a public key!!
-    c.public_key = read_from_file_(public_key_filename);
-    if (!std::regex_search(c.public_key, std::regex{R"(^-----BEGIN PUBLIC KEY-----)"}))
-    {
-        throw std::runtime_error{"Invalid public key"};
-    }
-    c.private_key = read_from_file_(private_key_filename);
 }
 
 std::string getenvstr_(const std::string &key)
@@ -109,17 +87,36 @@ std::string getenvstr_(const std::string &key)
 
 configuration::configuration() :
         mongo_uri{getenvstr_("MONGO_URI")},
-        mailgun_api_key{getenvstr_("MAILGUN_API_KEY")}
+        mailgun_api_key{getenvstr_("MAILGUN_API_KEY")},
+        public_key{getenv("PUBLIC_KEY")},
+        private_key{getenv("PRIVATE_KEY")}
 {
     if (mongo_uri.empty())
     {
-        std::runtime_error{"Invalid url specified in env MONGO_URI."};
+        std::runtime_error{"missing env var MONGO_URI."};
     }
 
     if (mailgun_api_key.empty())
     {
-        std::runtime_error{"Invalid url specified in env MAILGUN_API_KEY."};
+        std::runtime_error{"missing env var MAILGUN_API_KEY."};
     }
 
     db_pool = std::make_shared<mongocxx::pool>(mongocxx::uri{mongo_uri});
+
+
+    if (public_key.empty())
+    {
+        std::runtime_error{"missing env var PUBLIC_KEY."};
+    }
+
+    if (mailgun_api_key.empty())
+    {
+        std::runtime_error{"missing env var PRIVATE_KEY."};
+    }
+
+    // for security reasons, verify that this is actually a public key!!
+    if (!std::regex_search(public_key, std::regex{R"(^-----BEGIN PUBLIC KEY-----)"}))
+    {
+        throw std::runtime_error{"Invalid public key"};
+    }
 }

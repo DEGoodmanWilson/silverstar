@@ -26,32 +26,16 @@ set(CMAKE_CXX_STANDARD 17)
 include(conanbuildinfo.cmake)
 CONAN_BASIC_SETUP()
 
-find_package(libmongocxx REQUIRED)
-find_package(libbsoncxx REQUIRED)
-
 set(SOURCE_FILES
         main.cpp
-#        controllers/card_controller.cpp
-#        controllers/card_controller.h
-#        models/ability.cpp models/ability.h
-        auth_controller.cpp auth_controller.h configuration.cpp configuration.h)
+        auth_controller.cpp auth_controller.h
+        configuration.cpp configuration.h
+        )
 
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
 
-target_include_directories(${PROJECT_NAME}
-        PRIVATE ${LIBMONGOCXX_INCLUDE_DIRS}
-        PRIVATE ${LIBBSONCXX_INCLUDE_DIRS}
-        )
-
 target_link_libraries(${PROJECT_NAME}
         PRIVATE ${CONAN_LIBS}
-        PRIVATE ${LIBMONGOCXX_LIBRARIES}
-        PRIVATE ${LIBBSONCXX_LIBRARIES}
-        )
-
-target_compile_definitions(${PROJECT_NAME}
-        PRIVATE ${LIBMONGOCXX_DEFINITIONS}
-        PRIVATE ${LIBBSONCXX_DEFINITIONS}
         )
 
 

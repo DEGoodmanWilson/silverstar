@@ -20,6 +20,7 @@
 luna/[~=5.0]@DEGoodmanWilson/stable
 jsonformoderncpp/[~=3.1]@vthiery/stable
 cpp-jwt/[~=1.0]@DEGoodmanWilson/stable
+mongocxx/[~=3.2]@DEGoodmanWilson/testing
 libsodium/[~=1.0]@bincrafters/stable
 cpr/[~=1.3]@DEGoodmanWilson/stable
 inja/[~=1.0]@DEGoodmanWilson/stable

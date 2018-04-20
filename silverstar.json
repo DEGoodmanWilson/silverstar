@@ -1,5 +1,5 @@
 {
   "appname": "silverstar",
-  "port": 9091,
-  "domain": "localhost"
+  "port": 8080,
+  "domain": "https://silverstar.now.sh"
 }

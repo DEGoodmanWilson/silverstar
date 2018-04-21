@@ -153,8 +153,6 @@ luna::response auth_controller::register_(const luna::request &request)
     std::uniform_int_distribution<uint64_t> dis64(0, UINT64_MAX);
     std::string token = string_format_("%08x%08x%08x%08x", dis64(gen), dis64(gen), dis64(gen), dis64(gen));
 
-    luna::error_log(luna::log_level::DEBUG, token);
-
 
     // store in the DB, make it viable for 6 hours.
     auto expiry = std::chrono::system_clock::now() + std::chrono::hours{6};
@@ -250,7 +248,6 @@ luna::response auth_controller::login_(const luna::request &request)
     if (!authorized) return luna::unauthorized_response{"/"};
 
     // auth was provided, we need to check it.
-    luna::error_log(luna::log_level::DEBUG, authorized.username);
 
     // compare the email and the hash
     // Connect to DB

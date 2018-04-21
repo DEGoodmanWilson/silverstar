@@ -17,6 +17,8 @@
 
 #pragma once
 
+#include <string>
+#include <chrono>
 #include <mongocxx/pool.hpp>
 #include <nlohmann/json.hpp>
 
@@ -37,6 +39,8 @@ public:
     std::shared_ptr<mongocxx::pool> db_pool;
 
     std::string mailgun_api_key;
+
+    std::chrono::hours valid_for;
 };
 
 void from_json(const nlohmann::json &j, configuration &c);

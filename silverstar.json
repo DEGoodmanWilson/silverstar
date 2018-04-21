@@ -1,5 +1,6 @@
 {
   "appname": "silverstar",
   "port": 8080,
-  "domain": "https://silverstar.now.sh"
+  "domain": "https://silverstar.now.sh",
+  "valid_for": 8760
 }

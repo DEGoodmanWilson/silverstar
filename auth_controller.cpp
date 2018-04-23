@@ -95,9 +95,21 @@ auth_controller::auth_controller(std::shared_ptr<luna::router> router, configura
                            "/login",
                            std::bind(&auth_controller::login_, this, std::placeholders::_1));
 
-    router->handle_request(luna::request_method::GET,
-                           "/logout",
-                           std::bind(&auth_controller::logout_, this, std::placeholders::_1));
+    router->handle_request(luna::request_method::POST,
+                           "/password",
+                           std::bind(&auth_controller::change_password_, this, std::placeholders::_1),
+                           {
+                                   // require passwords to be at least 8 characters. Really this should be checked in FE, but a second check here is good too for folks who want to bypass the FE entirely.
+                                   {
+                                           "password", luna::parameter::required, luna::parameter::validate([](const std::string &a,
+                                                                                                               int length) -> bool
+                                                                                                            {
+                                                                                                                return a.length() >=
+                                                                                                                       length;
+                                                                                                            },
+                                                                                                            8)
+                                   }
+                           });
 
 }
 
@@ -183,7 +195,7 @@ luna::response auth_controller::register_(const luna::request &request)
     auto mailgun_result = cpr::Post(cpr::Url{"https://api.mailgun.net/v3/mail.goodman-wilson.com/messages"},
                                     cpr::Payload{{"to",      email},
                                                  {"from",    "auth@mail.goodman-wilson.com"},
-                                                 {"subject", "Verify your goodman-wilson.com account"},
+                                                 {"subject", "Verify your "+ config_.appname +" account"},
                                                  {"html",    mail_body_html},
                                                  {"text",    mail_body_text}},
                                     cpr::Authentication{"api", config_.mailgun_api_key});
@@ -299,7 +311,114 @@ luna::response auth_controller::login_(const luna::request &request)
     return enc_str;
 }
 
-luna::response auth_controller::logout_(const luna::request &request)
+luna::response auth_controller::change_password_(const luna::request &request)
 {
-    return 404;
+    // We have to verify that the requester has a valid token
+    // get the token TODO add this functionality into Luna!!
+    if (!request.headers.count("Authorization"))
+    {
+        return 401;
+    }
+
+    // Ensure that the header is of the form "Bearer abc", and extract the encoded bit
+    std::regex bearer_regex(R"(Bearer (.+))"); // We should look into also accepting RFC 4648
+    std::smatch bearer_match;
+    if (!std::regex_match(request.headers.at("Authorization"), bearer_match, bearer_regex) ||
+        (bearer_match.size() != 2))
+    {
+        return 401;
+    }
+
+    // The first sub_match is the whole string; the next
+    // sub_match is the first parenthesized expression.
+    auto token = bearer_match[1].str();
+
+    // This is a JWT—decode it then verify it!
+    jwt::jwt_object dec_obj;
+    try
+    {
+        dec_obj = jwt::decode(token, jwt::params::algorithms({"rs256"}), jwt::params::secret(config_.public_key));
+    }
+    catch (const std::runtime_error &e)
+    {
+        luna::error_log(luna::log_level::DEBUG, e.what());
+        return 401;
+    }
+
+    if(!dec_obj.has_claim("sub"))
+    {
+        return 401;
+    }
+
+    // made it this far, we have a valid token!
+    // A valid token gives us permission to change passwords.
+    // To get a new token, the user must log in again.
+    // All existing tokens will continue to be valid for their TTL.
+    //   This is a really strange auth model.
+    //   TTL needs to be quite small, then, yeah?
+    //   So that password changes can go into effect within an hour?
+    // TODO generate an email to the account owner that the password has been changed.
+
+    auto email = dec_obj.payload().get_claim_value<std::string>("sub");
+
+
+    auto password = request.params.at("password");
+
+    // hash the password. This is a C interface, booooo
+    char hashed_password[crypto_pwhash_STRBYTES];
+
+    if (crypto_pwhash_str(hashed_password,
+                          password.c_str(),
+                          password.length(),
+                          crypto_pwhash_OPSLIMIT_INTERACTIVE,
+                          crypto_pwhash_MEMLIMIT_INTERACTIVE) != 0)
+    {
+        /* out of memory */
+        throw std::runtime_error{"Not enough memory to hash password"};
+    }
+    password = hashed_password;
+
+    // Connect to DB
+    auto client = config_.db_pool->acquire();
+    auto users = (*client)["magique"]["users"];
+
+    // make sure account exists:
+    auto user = users.find_one(bsoncxx::builder::stream::document{} << "email" << email << bsoncxx::builder::stream::finalize);
+    if (!user) // if this user already exists, just return.
+    {
+        return 401;
+    }
+
+    users.update_one(
+            bsoncxx::builder::stream::document{} << "email" << email << bsoncxx::builder::stream::finalize,
+            bsoncxx::builder::stream::document{} << "$set" << bsoncxx::builder::stream::open_document <<
+                                                 "password" << password
+                                                 << bsoncxx::builder::stream::close_document
+                                                 << bsoncxx::builder::stream::finalize);
+
+    // Well, that seemed to work. Email the user to notify them
+    nlohmann::json mail_data;
+    mail_data["email"] = email;
+    mail_data["service"] = "Cardtagger";
+    mail_data["admin_name"] = "Don Goodman-Wilson";
+
+    inja::Environment env{"./templates/"};
+    auto mail_body_html = env.render_template(env.parse_template("password_change.html"), mail_data);
+    auto mail_body_text = env.render_template(env.parse_template("password_change.txt"), mail_data);
+
+    auto mailgun_result = cpr::Post(cpr::Url{"https://api.mailgun.net/v3/mail.goodman-wilson.com/messages"},
+                                    cpr::Payload{{"to",      email},
+                                                 {"from",    "auth@mail.goodman-wilson.com"},
+                                                 {"subject", "Your  "+ config_.appname +" password has been changed"},
+                                                 {"html",    mail_body_html},
+                                                 {"text",    mail_body_text}},
+                                    cpr::Authentication{"api", config_.mailgun_api_key});
+
+    if (mailgun_result.status_code != 200)
+    {
+        throw std::runtime_error{"Mailgun request failed for " + email};
+    }
+
+
+    return {"OK"};
 }

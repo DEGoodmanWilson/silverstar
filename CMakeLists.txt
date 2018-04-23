@@ -17,9 +17,7 @@
 #
 
 cmake_minimum_required(VERSION 3.6)
-set(PROJECT_NAME silverstar)
-
-project(${PROJECT_NAME})
+project(silverstar)
 
 set(CMAKE_CXX_STANDARD 17)
 

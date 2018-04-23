@@ -34,9 +34,7 @@ private:
 
     luna::response login_(const luna::request &request);
 
-    luna::response logout_(const luna::request &request);
-
-    std::string priv_key_, pub_key_; // TODO move to config?
+    luna::response change_password_(const luna::request &request);
 
     configuration config_;
 };

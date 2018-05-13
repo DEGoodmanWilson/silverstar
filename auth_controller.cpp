@@ -207,8 +207,8 @@ luna::response auth_controller::register_(const luna::request &request)
     std::string token = string_format_("%08x%08x%08x%08x", dis64(gen), dis64(gen), dis64(gen), dis64(gen));
 
 
-    // store in the DB, make it viable for 6 hours.
-    auto expiry = std::chrono::system_clock::now() + std::chrono::hours{6};
+    // store in the DB, make it viable for the specified amount of time.
+    auto expiry = std::chrono::system_clock::now() + config_.email_verification_window_seconds;
     auto expiry_seconds = std::chrono::time_point_cast<std::chrono::seconds>(expiry);
 
     auto expiry_value = expiry_seconds.time_since_epoch();
@@ -345,7 +345,7 @@ luna::response auth_controller::login_(const luna::request &request)
     obj.add_claim("iss", SILVERSTAR)
             .add_claim("sub", authorized.username)
             .add_claim("aud", "verified") // for verified users only
-            .add_claim("exp", std::chrono::system_clock::now() + config_.valid_for_seconds);
+            .add_claim("exp", std::chrono::system_clock::now() + config_.jwt_valid_for_seconds);
 
     //Get the encoded SILVERSTAR/assertion
     auto enc_str = obj.signature();

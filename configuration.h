@@ -40,7 +40,8 @@ public:
 
     std::string mailgun_api_key;
 
-    std::chrono::seconds valid_for_seconds;
+    std::chrono::seconds jwt_valid_for_seconds;
+    std::chrono::seconds email_verification_window_seconds;
 };
 
 void from_json(const nlohmann::json &j, configuration &c);

@@ -2,5 +2,6 @@
   "appname": "silverstar",
   "port": 8080,
   "domain": "https://silverstar.now.sh",
-  "valid_for_seconds": 3600
+  "token_valid_for_seconds": 3600,
+  "email_verification_window_seconds": 21600
 }

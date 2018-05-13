@@ -37,6 +37,26 @@
 #include <mongocxx/stdx.hpp>
 #include <mongocxx/uri.hpp>
 
+#if defined(__has_include)
+
+#if __has_include(<experimental/optional>)
+
+#define OPT_NS std::experimental
+#include <experimental/optional>
+
+#elif __has_include(<optional>)
+
+#define OPT_NS std
+#include <optional>
+
+#endif
+
+#else // no __has_include
+
+#error Silverstar requires std::experimental::optional or std::optional to work!
+
+#endif
+
 
 static const std::string SILVERSTAR{"silverstar"};
 
@@ -49,13 +69,13 @@ std::string string_format_(const std::string &format, Args ... args)
     return std::string{buf.get(), buf.get() + size - 1}; // We don't want the '\0' inside
 }
 
-std::experimental::optional<jwt::jwt_object> validate_jwt_(const luna::headers &headers, const std::string &public_key)
+OPT_NS::optional<jwt::jwt_object> validate_jwt_(const luna::headers &headers, const std::string &public_key)
 {
 // We have to verify that the requester has a valid token
 // get the token TODO add this functionality into Luna!!
     if (!headers.count("Authorization"))
     {
-        return std::experimental::nullopt;
+        return OPT_NS::nullopt;
     }
 
 // Ensure that the header is of the form "Bearer abc", and extract the encoded bit
@@ -64,7 +84,7 @@ std::experimental::optional<jwt::jwt_object> validate_jwt_(const luna::headers &
     if (!std::regex_match(headers.at("Authorization"), bearer_match, bearer_regex) ||
         (bearer_match.size() != 2))
     {
-        return std::experimental::nullopt;
+        return OPT_NS::nullopt;
     }
 
 // The first sub_match is the whole string; the next
@@ -80,12 +100,12 @@ std::experimental::optional<jwt::jwt_object> validate_jwt_(const luna::headers &
     catch (const std::runtime_error &e)
     {
         luna::error_log(luna::log_level::DEBUG, e.what());
-        return std::experimental::nullopt;
+        return OPT_NS::nullopt;
     }
 
     if (!dec_obj.has_claim("sub"))
     {
-        return std::experimental::nullopt;
+        return OPT_NS::nullopt;
     }
 
     return dec_obj;

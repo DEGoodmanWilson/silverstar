@@ -2,5 +2,5 @@
   "appname": "silverstar",
   "port": 8080,
   "domain": "https://silverstar.now.sh",
-  "valid_for": 8760
+  "valid_for_seconds": 3600
 }

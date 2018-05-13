@@ -44,7 +44,7 @@ std::string read_from_file_(const std::string &path)
 
 void from_json(const nlohmann::json &j, configuration &c)
 {
-    std::unordered_set<std::string> required{"appname", "port", "domain", "valid_for"};
+    std::unordered_set<std::string> required{"appname", "port", "domain", "valid_for_seconds"};
 
     if (!j.is_object())
     {
@@ -72,10 +72,10 @@ void from_json(const nlohmann::json &j, configuration &c)
             required.erase(key);
             c.domain = kv.value().get<std::string>();
         }
-        else if (key == "valid_for")
+        else if (key == "valid_for_seconds")
         {
             required.erase(key);
-            c.valid_for = std::chrono::hours{kv.value().get<uint16_t>()};
+            c.valid_for_seconds = std::chrono::seconds{kv.value().get<uint16_t>()};
         }
     }
 

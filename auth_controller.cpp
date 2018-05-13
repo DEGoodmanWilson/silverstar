@@ -345,7 +345,7 @@ luna::response auth_controller::login_(const luna::request &request)
     obj.add_claim("iss", SILVERSTAR)
             .add_claim("sub", authorized.username)
             .add_claim("aud", "verified") // for verified users only
-            .add_claim("exp", std::chrono::system_clock::now() + config_.valid_for);
+            .add_claim("exp", std::chrono::system_clock::now() + config_.valid_for_seconds);
 
     //Get the encoded SILVERSTAR/assertion
     auto enc_str = obj.signature();

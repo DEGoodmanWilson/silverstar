@@ -40,7 +40,7 @@ public:
 
     std::string mailgun_api_key;
 
-    std::chrono::hours valid_for;
+    std::chrono::seconds valid_for_seconds;
 };
 
 void from_json(const nlohmann::json &j, configuration &c);

@@ -49,16 +49,58 @@ std::string string_format_(const std::string &format, Args ... args)
     return std::string{buf.get(), buf.get() + size - 1}; // We don't want the '\0' inside
 }
 
+std::experimental::optional<jwt::jwt_object> validate_jwt_(const luna::headers &headers, const std::string &public_key)
+{
+// We have to verify that the requester has a valid token
+// get the token TODO add this functionality into Luna!!
+    if (!headers.count("Authorization"))
+    {
+        return std::experimental::nullopt;
+    }
+
+// Ensure that the header is of the form "Bearer abc", and extract the encoded bit
+    std::regex bearer_regex(R"(Bearer (.+))"); // We should look into also accepting RFC 4648
+    std::smatch bearer_match;
+    if (!std::regex_match(headers.at("Authorization"), bearer_match, bearer_regex) ||
+        (bearer_match.size() != 2))
+    {
+        return std::experimental::nullopt;
+    }
+
+// The first sub_match is the whole string; the next
+// sub_match is the first parenthesized expression.
+    auto token = bearer_match[1].str();
+
+// This is a JWT—decode it then verify it!
+    jwt::jwt_object dec_obj;
+    try
+    {
+        dec_obj = jwt::decode(token, jwt::params::algorithms({"rs256"}), jwt::params::secret(public_key));
+    }
+    catch (const std::runtime_error &e)
+    {
+        luna::error_log(luna::log_level::DEBUG, e.what());
+        return std::experimental::nullopt;
+    }
+
+    if (!dec_obj.has_claim("sub"))
+    {
+        return std::experimental::nullopt;
+    }
+
+    return dec_obj;
+}
+
 auth_controller::auth_controller(std::shared_ptr<luna::router> router, configuration config) :
         config_{config}
 {
     // Endpoints for:
     //  1. Account creation
     //  2. Logging in
-    //  3. Logging out
-    // Planned:
-    //  4. Email verification and re-verification
+    //  3. Refreshing a token (re-logging in)
+    //  4. Email verification and (planned?) re-verification
     //  5. Changing password
+    // Planned:
     //  6. Changing email
     //  Eventually want to add support for roles and access levels and so forth
 
@@ -94,6 +136,9 @@ auth_controller::auth_controller(std::shared_ptr<luna::router> router, configura
     router->handle_request(luna::request_method::GET,
                            "/login",
                            std::bind(&auth_controller::login_, this, std::placeholders::_1));
+    router->handle_request(luna::request_method::PUT,
+                           "/login",
+                           std::bind(&auth_controller::relogin_, this, std::placeholders::_1));
 
     router->handle_request(luna::request_method::POST,
                            "/password",
@@ -195,7 +240,7 @@ luna::response auth_controller::register_(const luna::request &request)
     auto mailgun_result = cpr::Post(cpr::Url{"https://api.mailgun.net/v3/mail.goodman-wilson.com/messages"},
                                     cpr::Payload{{"to",      email},
                                                  {"from",    "auth@mail.goodman-wilson.com"},
-                                                 {"subject", "Verify your "+ config_.appname +" account"},
+                                                 {"subject", "Verify your " + config_.appname + " account"},
                                                  {"html",    mail_body_html},
                                                  {"text",    mail_body_text}},
                                     cpr::Authentication{"api", config_.mailgun_api_key});
@@ -304,7 +349,29 @@ luna::response auth_controller::login_(const luna::request &request)
     obj.add_claim("iss", SILVERSTAR)
             .add_claim("sub", authorized.username)
             .add_claim("aud", "verified") // for verified users only
-            .add_claim("exp", std::chrono::system_clock::now() + std::chrono::hours{24});
+            .add_claim("exp", std::chrono::system_clock::now() + config_.valid_for);
+
+    //Get the encoded SILVERSTAR/assertion
+    auto enc_str = obj.signature();
+    return enc_str;
+}
+
+luna::response auth_controller::relogin_(const luna::request &request)
+{
+    auto jwt = validate_jwt_(request.headers, config_.public_key);
+    if (!jwt)
+    {
+        return 401;
+    }
+
+    auto email = jwt->payload().get_claim_value<std::string>("sub");
+
+    //Create new JWT object
+    jwt::jwt_object obj{jwt::params::algorithm(jwt::algorithm::RS256), jwt::params::secret(config_.private_key)};
+    obj.add_claim("iss", SILVERSTAR)
+            .add_claim("sub", email)
+            .add_claim("aud", "verified") // for verified users only
+            .add_claim("exp", std::chrono::system_clock::now() + config_.valid_for);
 
     //Get the encoded SILVERSTAR/assertion
     auto enc_str = obj.signature();
@@ -313,39 +380,8 @@ luna::response auth_controller::login_(const luna::request &request)
 
 luna::response auth_controller::change_password_(const luna::request &request)
 {
-    // We have to verify that the requester has a valid token
-    // get the token TODO add this functionality into Luna!!
-    if (!request.headers.count("Authorization"))
-    {
-        return 401;
-    }
-
-    // Ensure that the header is of the form "Bearer abc", and extract the encoded bit
-    std::regex bearer_regex(R"(Bearer (.+))"); // We should look into also accepting RFC 4648
-    std::smatch bearer_match;
-    if (!std::regex_match(request.headers.at("Authorization"), bearer_match, bearer_regex) ||
-        (bearer_match.size() != 2))
-    {
-        return 401;
-    }
-
-    // The first sub_match is the whole string; the next
-    // sub_match is the first parenthesized expression.
-    auto token = bearer_match[1].str();
-
-    // This is a JWT—decode it then verify it!
-    jwt::jwt_object dec_obj;
-    try
-    {
-        dec_obj = jwt::decode(token, jwt::params::algorithms({"rs256"}), jwt::params::secret(config_.public_key));
-    }
-    catch (const std::runtime_error &e)
-    {
-        luna::error_log(luna::log_level::DEBUG, e.what());
-        return 401;
-    }
-
-    if(!dec_obj.has_claim("sub"))
+    auto jwt = validate_jwt_(request.headers, config_.public_key);
+    if (!jwt)
     {
         return 401;
     }
@@ -359,7 +395,7 @@ luna::response auth_controller::change_password_(const luna::request &request)
     //   So that password changes can go into effect within an hour?
     // TODO generate an email to the account owner that the password has been changed.
 
-    auto email = dec_obj.payload().get_claim_value<std::string>("sub");
+    auto email = jwt->payload().get_claim_value<std::string>("sub");
 
 
     auto password = request.params.at("password");
@@ -383,7 +419,8 @@ luna::response auth_controller::change_password_(const luna::request &request)
     auto users = (*client)["magique"]["users"];
 
     // make sure account exists:
-    auto user = users.find_one(bsoncxx::builder::stream::document{} << "email" << email << bsoncxx::builder::stream::finalize);
+    auto user = users.find_one(
+            bsoncxx::builder::stream::document{} << "email" << email << bsoncxx::builder::stream::finalize);
     if (!user) // if this user already exists, just return.
     {
         return 401;
@@ -409,7 +446,7 @@ luna::response auth_controller::change_password_(const luna::request &request)
     auto mailgun_result = cpr::Post(cpr::Url{"https://api.mailgun.net/v3/mail.goodman-wilson.com/messages"},
                                     cpr::Payload{{"to",      email},
                                                  {"from",    "auth@mail.goodman-wilson.com"},
-                                                 {"subject", "Your  "+ config_.appname +" password has been changed"},
+                                                 {"subject", "Your  " + config_.appname + " password has been changed"},
                                                  {"html",    mail_body_html},
                                                  {"text",    mail_body_text}},
                                     cpr::Authentication{"api", config_.mailgun_api_key});

@@ -97,7 +97,6 @@ auth_controller::auth_controller(std::shared_ptr<luna::router> router, configura
     // Endpoints for:
     //  1. Account creation
     //  2. Logging in
-    //  3. Refreshing a token (re-logging in)
     //  4. Email verification and (planned?) re-verification
     //  5. Changing password
     // Planned:
@@ -136,9 +135,6 @@ auth_controller::auth_controller(std::shared_ptr<luna::router> router, configura
     router->handle_request(luna::request_method::GET,
                            "/login",
                            std::bind(&auth_controller::login_, this, std::placeholders::_1));
-    router->handle_request(luna::request_method::PUT,
-                           "/login",
-                           std::bind(&auth_controller::relogin_, this, std::placeholders::_1));
 
     router->handle_request(luna::request_method::POST,
                            "/password",
@@ -348,28 +344,6 @@ luna::response auth_controller::login_(const luna::request &request)
     jwt::jwt_object obj{jwt::params::algorithm(jwt::algorithm::RS256), jwt::params::secret(config_.private_key)};
     obj.add_claim("iss", SILVERSTAR)
             .add_claim("sub", authorized.username)
-            .add_claim("aud", "verified") // for verified users only
-            .add_claim("exp", std::chrono::system_clock::now() + config_.valid_for);
-
-    //Get the encoded SILVERSTAR/assertion
-    auto enc_str = obj.signature();
-    return enc_str;
-}
-
-luna::response auth_controller::relogin_(const luna::request &request)
-{
-    auto jwt = validate_jwt_(request.headers, config_.public_key);
-    if (!jwt)
-    {
-        return 401;
-    }
-
-    auto email = jwt->payload().get_claim_value<std::string>("sub");
-
-    //Create new JWT object
-    jwt::jwt_object obj{jwt::params::algorithm(jwt::algorithm::RS256), jwt::params::secret(config_.private_key)};
-    obj.add_claim("iss", SILVERSTAR)
-            .add_claim("sub", email)
             .add_claim("aud", "verified") // for verified users only
             .add_claim("exp", std::chrono::system_clock::now() + config_.valid_for);
 

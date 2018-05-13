@@ -34,8 +34,6 @@ private:
 
     luna::response login_(const luna::request &request);
 
-    luna::response relogin_(const luna::request &request);
-
     luna::response change_password_(const luna::request &request);
 
     configuration config_;

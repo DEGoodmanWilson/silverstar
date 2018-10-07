@@ -388,7 +388,7 @@ luna::response auth_controller::change_password_(const luna::request &request)
     //   This is a really strange auth model.
     //   TTL needs to be quite small, then, yeah?
     //   So that password changes can go into effect within an hour?
-    // TODO generate an email to the account owner that the password has been changed.
+    // generate an email to the account owner that the password has been changed.
 
     auto email = jwt->payload().get_claim_value<std::string>("sub");
 

@@ -1,0 +1,12 @@
+{
+  "app_name": "silverstar",
+  "service_name": "Your Service's Name Here",
+  "admin_name": "Your Name Here",
+  "port": 8080,
+  "domain": "https://awesomesauce.example.com",
+  "token_valid_for_seconds": 3600,
+  "email_verification_window_seconds": 21600,
+
+  "mailgun_domain": "mail.example.com",
+  "mailgun_email_source": "auth@mail.example.com"
+}

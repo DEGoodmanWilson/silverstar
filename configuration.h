@@ -27,7 +27,9 @@ class configuration
 public:
     configuration();
 
-    std::string appname;
+    std::string app_name;
+    std::string service_name;
+    std::string admin_name;
 
     uint16_t port;
     std::string domain;
@@ -39,6 +41,8 @@ public:
     std::shared_ptr<mongocxx::pool> db_pool;
 
     std::string mailgun_api_key;
+    std::string mailgun_domain;
+    std::string mailgun_email_source;
 
     std::chrono::seconds jwt_valid_for_seconds;
     std::chrono::seconds email_verification_window_seconds;

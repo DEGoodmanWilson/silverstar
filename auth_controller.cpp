@@ -246,17 +246,18 @@ luna::response auth_controller::register_(const luna::request &request)
     nlohmann::json mail_data;
     mail_data["link"] = link;
     mail_data["email"] = email;
-    mail_data["service"] = "Cardtagger";
-    mail_data["admin_name"] = "Don Goodman-Wilson";
+    mail_data["service_name"] = config_.service_name;
+    mail_data["admin_name"] = config_.admin_name;
 
     inja::Environment env{"./templates/"};
     auto mail_body_html = env.render_template(env.parse_template("confirm_email.html"), mail_data);
     auto mail_body_text = env.render_template(env.parse_template("confirm_email.txt"), mail_data);
+    auto mail_subject = env.render_template(env.parse_template("confirm_email_subject.txt"), mail_data);
 
-    auto mailgun_result = cpr::Post(cpr::Url{"https://api.mailgun.net/v3/mail.goodman-wilson.com/messages"},
+    auto mailgun_result = cpr::Post(cpr::Url{"https://api.mailgun.net/v3/"+config_.mailgun_domain+"/messages"},
                                     cpr::Payload{{"to",      email},
-                                                 {"from",    "auth@mail.goodman-wilson.com"},
-                                                 {"subject", "Verify your " + config_.appname + " account"},
+                                                 {"from",    config_.mailgun_email_source},
+                                                 {"subject", mail_subject},
                                                  {"html",    mail_body_html},
                                                  {"text",    mail_body_text}},
                                     cpr::Authentication{"api", config_.mailgun_api_key});
@@ -430,17 +431,18 @@ luna::response auth_controller::change_password_(const luna::request &request)
     // Well, that seemed to work. Email the user to notify them
     nlohmann::json mail_data;
     mail_data["email"] = email;
-    mail_data["service"] = "Cardtagger";
-    mail_data["admin_name"] = "Don Goodman-Wilson";
+    mail_data["service_name"] = config_.service_name;
+    mail_data["admin_name"] = config_.admin_name;
 
     inja::Environment env{"./templates/"};
     auto mail_body_html = env.render_template(env.parse_template("password_change.html"), mail_data);
     auto mail_body_text = env.render_template(env.parse_template("password_change.txt"), mail_data);
+    auto mail_subject = env.render_template(env.parse_template("password_change_subject.txt"), mail_data);
 
-    auto mailgun_result = cpr::Post(cpr::Url{"https://api.mailgun.net/v3/mail.goodman-wilson.com/messages"},
+    auto mailgun_result = cpr::Post(cpr::Url{"https://api.mailgun.net/v3/" + config_.mailgun_domain + "/messages"},
                                     cpr::Payload{{"to",      email},
-                                                 {"from",    "auth@mail.goodman-wilson.com"},
-                                                 {"subject", "Your  " + config_.appname + " password has been changed"},
+                                                 {"from",    config_.mailgun_email_source},
+                                                 {"subject", mail_subject},
                                                  {"html",    mail_body_html},
                                                  {"text",    mail_body_text}},
                                     cpr::Authentication{"api", config_.mailgun_api_key});

@@ -1,7 +1,12 @@
 {
-  "appname": "silverstar",
+  "app_name": "silverstar",
+  "service_name": "Cardtagger",
+  "admin_name": "Don Goodman-Wilson",
   "port": 8080,
   "domain": "https://silverstar.now.sh",
   "token_valid_for_seconds": 3600,
-  "email_verification_window_seconds": 21600
+  "email_verification_window_seconds": 21600,
+
+  "mailgun_domain": "mail.goodman-wilson.com",
+  "mailgun_email_source": "auth@mail.goodman-wilson.com"
 }

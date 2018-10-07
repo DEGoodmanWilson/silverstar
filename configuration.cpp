@@ -44,7 +44,7 @@ std::string read_from_file_(const std::string &path)
 
 void from_json(const nlohmann::json &j, configuration &c)
 {
-    std::unordered_set<std::string> required{"appname", "port", "domain", "token_valid_for_seconds", "email_verification_window_seconds"};
+    std::unordered_set<std::string> required{"app_name", "service_name", "admin_name", "port", "domain", "token_valid_for_seconds", "email_verification_window_seconds", "mailgun_domain", "mailgun_email_source"};
 
     if (!j.is_object())
     {
@@ -57,10 +57,20 @@ void from_json(const nlohmann::json &j, configuration &c)
     for (auto kv = j.begin(); kv != j.end(); ++kv)
     {
         std::string key = kv.key();
-        if (key == "appname")
+        if (key == "app_name")
         {
             required.erase(key);
-            c.appname = kv.value().get<std::string>();
+            c.app_name = kv.value().get<std::string>();
+        }
+        else if (key == "service_name")
+        {
+            required.erase(key);
+            c.service_name = kv.value().get<std::string>();
+        }
+        else if (key == "admin_name")
+        {
+            required.erase(key);
+            c.admin_name = kv.value().get<std::string>();
         }
         else if (key == "port")
         {
@@ -81,6 +91,16 @@ void from_json(const nlohmann::json &j, configuration &c)
         {
             required.erase(key);
             c.email_verification_window_seconds = std::chrono::seconds{kv.value().get<uint16_t>()};
+        }
+        else if (key == "mailgun_domain")
+        {
+            required.erase(key);
+            c.mailgun_domain = kv.value().get<std::string>();
+        }
+        else if (key == "mailgun_email_source")
+        {
+            required.erase(key);
+            c.mailgun_email_source = kv.value().get<std::string>();
         }
     }
 

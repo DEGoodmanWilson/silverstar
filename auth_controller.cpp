@@ -37,6 +37,8 @@
 #include <mongocxx/stdx.hpp>
 #include <mongocxx/uri.hpp>
 
+#include <uuid/uuid.h>
+
 #if defined(__has_include)
 
 #if __has_include(<experimental/optional>)
@@ -305,8 +307,23 @@ luna::response auth_controller::confirm_(const luna::request &request)
     }
 
     const std::string password{(*provisional_user).view()["password"].get_utf8().value.to_string()};
-    users.insert_one(bsoncxx::builder::stream::document{} << "email" << email << "password"
-                                                          << password
+
+    // generate a UUID to identify this account
+    uuid_t uuid;
+    auto safely_generated = uuid_generate_time_safe(uuid);
+    char uuid_str[37];      // ex. "1b4e28ba-2fa1-11d2-883f-0016d3cca427" + "\0"
+    uuid_unparse_lower(uuid, uuid_str);
+    const std::string uid{uuid_str};
+    // TODO now check if the UUID is guaranteed to be unique. If not, we need to query the DB
+    // to see if it has already been used :(
+    if(safely_generated == -1)
+    {
+      //TODO do that check here
+    }
+
+    users.insert_one(bsoncxx::builder::stream::document{} << "email" << email
+                                                          << "password" << password
+                                                          << "uid" << uid
                                                           << bsoncxx::builder::stream::finalize);
 
 
@@ -352,6 +369,7 @@ luna::response auth_controller::login_(const luna::request &request)
     }
 
     const std::string hashed_password{(*user).view()["password"].get_utf8().value.to_string()};
+    const std::string uid{(*user).view()["uid"].get_utf8().value.to_string()};
 
     if (crypto_pwhash_str_verify
                 (hashed_password.c_str(), authorized.password.c_str(), authorized.password.length()) != 0)
@@ -359,12 +377,10 @@ luna::response auth_controller::login_(const luna::request &request)
         return 401;
     }
 
-
-
     //Create JWT object
     jwt::jwt_object obj{jwt::params::algorithm(jwt::algorithm::RS256), jwt::params::secret(config_.private_key)};
     obj.add_claim("iss", SILVERSTAR)
-            .add_claim("sub", authorized.username)
+            .add_claim("sub", uid)
             .add_claim("aud", "verified") // for verified users only
             .add_claim("exp", std::chrono::system_clock::now() + config_.jwt_valid_for_seconds);
 
